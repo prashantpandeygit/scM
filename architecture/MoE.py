@@ -32,3 +32,12 @@ class ProjectionHead(nn.Module):
         )
     def forward(self, x):
         return self.net(x)
+
+
+# Cancer Classifier
+class CancerTypeClassifier(nn.Module):
+    def __init__(self, input_dim, num_classes):
+        super().__init__()
+        self.linear = nn.Linear(input_dim, num_classes)
+    def forward(self, x):
+        return self.linear(x)   # raw logits
