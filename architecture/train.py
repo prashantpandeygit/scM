@@ -1,2 +1,0 @@
-from MoE import StaticMoE
-
