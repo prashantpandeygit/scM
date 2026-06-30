@@ -49,10 +49,9 @@ profiler = Profiler(
     test_input="query.h5ad",
     pretrain_dir="model",
     norm_type="cpm_log1p",
-    batch_size=8192, #default (lower if inference runs OOM)
 )
 
-adata = profiler.load().profile()
+result_adata = profiler.load().profile()
 ```
 
 For TPM data:
@@ -60,7 +59,7 @@ For TPM data:
 ```python
 from scMoE import Profiler
 
-adata = (
+result_adata = (
     Profiler(
         test_input="query.h5ad",
         pretrain_dir="model",
@@ -76,7 +75,7 @@ For data already normalized:
 ```python
 from scMoE import Profiler
 
-adata = (
+result_adata = (
     Profiler(
         test_input="query.h5ad",
         pretrain_dir="model",
@@ -89,7 +88,7 @@ adata = (
 
 ## Output
 
-Predictions are added to `adata.obs`:
+Predictions are added to `result_adata.obs`:
 
 ```text
 malignancy_call      Normal or Malignant
@@ -102,6 +101,12 @@ expert_weight_*      per-expert gate weights
 View results:
 
 ```python
+result_adata.obs["malignancy_call"].head()
+```
+
+View all other scMoE output columns:
+
+```python
 prediction_cols = [
     "malignancy_call",
     "malignancy_score",
@@ -109,9 +114,9 @@ prediction_cols = [
     "gate_entropy",
 ]
 
-expert_cols = [c for c in adata.obs.columns if c.startswith("expert_weight_")]
+expert_cols = [c for c in result_adata.obs.columns if c.startswith("expert_weight_")]
 
-adata.obs[prediction_cols + expert_cols].head()
+result_adata.obs[prediction_cols + expert_cols].head()
 ```
 
 ## Save
@@ -119,13 +124,13 @@ adata.obs[prediction_cols + expert_cols].head()
 Save the full AnnData object:
 
 ```python
-adata.write_h5ad("predictions.h5ad")
+result_adata.write_h5ad("predictions.h5ad")
 ```
 
 Save only the prediction table:
 
 ```python
-adata.obs[prediction_cols + expert_cols].to_csv("predictions.csv")
+result_adata.obs[prediction_cols + expert_cols].to_csv("predictions.csv")
 ```
 
 ## Example
@@ -135,7 +140,7 @@ from scMoE import Profiler
 
 input_path = "query.h5ad"
 
-adata = (
+result_adata = (
     Profiler(
         test_input=input_path,
         pretrain_dir="model",
@@ -145,18 +150,20 @@ adata = (
     .profile()
 )
 
+print(result_adata.obs["malignancy_call"].head())
+
 prediction_cols = [
     "malignancy_call",
     "malignancy_score",
     "primary_expert",
     "gate_entropy",
 ]
-expert_cols = [c for c in adata.obs.columns if c.startswith("expert_weight_")]
+expert_cols = [c for c in result_adata.obs.columns if c.startswith("expert_weight_")]
 
-print(adata.obs[prediction_cols + expert_cols].head())
+print(result_adata.obs[prediction_cols + expert_cols].head())
 
-adata.write_h5ad("predictions.h5ad")
-adata.obs[prediction_cols + expert_cols].to_csv("predictions.csv")
+result_adata.write_h5ad("predictions.h5ad")
+result_adata.obs[prediction_cols + expert_cols].to_csv("predictions.csv")
 ```
 
 ## Note
