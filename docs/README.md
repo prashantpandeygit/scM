@@ -15,7 +15,7 @@ from scMoE import Profiler
 
 profiler = Profiler(
     "query.h5ad",
-    pretrain_dir="scMoE/model",
+    pretrain_dir="model",
     norm_type="cpm_log1p",  # raw UMI counts
 )
 
@@ -25,14 +25,14 @@ adata = profiler.load().profile()
 For TPM input:
 
 ```python
-profiler = Profiler("query.h5ad", pretrain_dir="scMoE/model", norm_type="tpm_log1p")
+profiler = Profiler("query.h5ad", pretrain_dir="model", norm_type="tpm_log1p")
 adata = profiler.load().profile()
 ```
 
 For data that is already normalized exactly like training:
 
 ```python
-profiler = Profiler("query.h5ad", pretrain_dir="scMoE/model", norm_type=False)
+profiler = Profiler("query.h5ad", pretrain_dir="model", norm_type=False)
 adata = profiler.load().profile()
 ```
 
