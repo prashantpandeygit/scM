@@ -1,0 +1,10 @@
+{
+  "input_dim": 3735,
+  "experts": 4,
+  "expert_hidden": 128,
+  "gate_hidden": 128,
+  "dropout": 0.25,
+  "input_dropout": 0.05,
+  "temperature": 1.0, #to be changed
+  "threshold": 0.5
+}
