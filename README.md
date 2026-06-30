@@ -119,53 +119,6 @@ expert_cols = [c for c in result_adata.obs.columns if c.startswith("expert_weigh
 result_adata.obs[prediction_cols + expert_cols].head()
 ```
 
-## Save
-
-Save the full AnnData object:
-
-```python
-result_adata.write_h5ad("predictions.h5ad")
-```
-
-Save only the prediction table:
-
-```python
-result_adata.obs[prediction_cols + expert_cols].to_csv("predictions.csv")
-```
-
-## Example
-
-```python
-from scMoE import Profiler
-
-input_path = "query.h5ad"
-
-result_adata = (
-    Profiler(
-        test_input=input_path,
-        pretrain_dir="model",
-        norm_type="cpm_log1p",
-    )
-    .load()
-    .profile()
-)
-
-print(result_adata.obs["malignancy_call"].head())
-
-prediction_cols = [
-    "malignancy_call",
-    "malignancy_score",
-    "primary_expert",
-    "gate_entropy",
-]
-expert_cols = [c for c in result_adata.obs.columns if c.startswith("expert_weight_")]
-
-print(result_adata.obs[prediction_cols + expert_cols].head())
-
-result_adata.write_h5ad("predictions.h5ad")
-result_adata.obs[prediction_cols + expert_cols].to_csv("predictions.csv")
-```
-
 ## Note
 
 - `geneorder.tsv` controls the model gene order. Missing genes are filled with zero after alignment.
