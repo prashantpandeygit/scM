@@ -23,19 +23,6 @@ NETWORK_CONFIG_KEYS = {
     "input_dropout",
 }
 
-PREDICTION_COLUMNS = {
-    "malignancy_call",
-    "malignancy_score",
-    "primary_expert",
-    "primary_expert_label",
-    "gate_entropy",
-    "normal_expert_weight",
-    "malignant_expert_weight",
-    "normal_expert_logit",
-    "malignant_expert_logit",
-}
-
-
 class Profiler:
 
     def __init__(
@@ -99,7 +86,6 @@ class Profiler:
         target_idx, source_idx, missing = feature_indexer(self.adata.var_names, self.features)
         self.missing_features = missing
         self._report_feature_overlap(len(missing))
-        self._clear_prediction_columns()
 
         probs = []
         gates = []
