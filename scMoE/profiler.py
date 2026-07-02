@@ -14,6 +14,28 @@ from .preprocessing import (
 )
 
 
+NETWORK_CONFIG_KEYS = {
+    "input_dim",
+    "experts",
+    "expert_hidden",
+    "gate_hidden",
+    "dropout",
+    "input_dropout",
+}
+
+PREDICTION_COLUMNS = {
+    "malignancy_call",
+    "malignancy_score",
+    "primary_expert",
+    "primary_expert_label",
+    "gate_entropy",
+    "normal_expert_weight",
+    "malignant_expert_weight",
+    "normal_expert_logit",
+    "malignant_expert_logit",
+}
+
+
 class Profiler:
 
     def __init__(
@@ -45,6 +67,8 @@ class Profiler:
         self.train_std = None
         self.temperature = 1.0
         self.threshold = 0.5
+        self.non_malignant_expert = 0
+        self.malignant_expert = 1
         self.config = {}
         self.missing_features = []
         self.fitted = False
@@ -75,9 +99,11 @@ class Profiler:
         target_idx, source_idx, missing = feature_indexer(self.adata.var_names, self.features)
         self.missing_features = missing
         self._report_feature_overlap(len(missing))
+        self._clear_prediction_columns()
 
         probs = []
         gates = []
+        expert_logits = []
 
         self.model.eval()
         n_cells = self.adata.n_obs
@@ -96,28 +122,41 @@ class Profiler:
                 x = zscore_batch(x, self.train_mean, self.train_std)
                 x_tensor = torch.from_numpy(x).to(self.device)
 
-                logits, gate_weights, _ = self.model(x_tensor)
+                logits, gate_weights, batch_expert_logits = self.model(x_tensor)
                 logits = logits / float(self.temperature)
                 probs.append(torch.sigmoid(logits).cpu().numpy().ravel())
                 gates.append(gate_weights.cpu().numpy())
+                expert_logits.append(batch_expert_logits.cpu().numpy())
 
         probs = np.concatenate(probs)
         gates = np.concatenate(gates, axis=0)
+        expert_logits = np.concatenate(expert_logits, axis=0)
         pred = probs >= float(self.threshold)
+        primary_expert = gates.argmax(axis=1).astype(int)
+        primary_expert_label = np.where(
+            primary_expert == self.malignant_expert,
+            "Malignant",
+            "Normal",
+        )
 
         self.adata.obs["malignancy_call"] = pd.Categorical(
             np.where(pred, "Malignant", "Normal"),
             categories=["Normal", "Malignant"],
         )
         self.adata.obs["malignancy_score"] = probs
-        self.adata.obs["primary_expert"] = gates.argmax(axis=1).astype(int)
+        self.adata.obs["primary_expert"] = primary_expert
+        self.adata.obs["primary_expert_label"] = pd.Categorical(
+            primary_expert_label,
+            categories=["Normal", "Malignant"],
+        )
         self.adata.obs["gate_entropy"] = -np.sum(
             gates * np.log(np.clip(gates, 1e-8, 1.0)),
             axis=1,
         )
-
-        for i in range(gates.shape[1]):
-            self.adata.obs[f"expert_weight_{i}"] = gates[:, i]
+        self.adata.obs["normal_expert_weight"] = gates[:, self.non_malignant_expert]
+        self.adata.obs["malignant_expert_weight"] = gates[:, self.malignant_expert]
+        self.adata.obs["normal_expert_logit"] = expert_logits[:, self.non_malignant_expert]
+        self.adata.obs["malignant_expert_logit"] = expert_logits[:, self.malignant_expert]
 
         return self.adata
 
@@ -144,23 +183,17 @@ class Profiler:
 
         self.config = infer_config_from_state_dict(state_dict)
         if isinstance(checkpoint, dict) and isinstance(checkpoint.get("config"), dict):
-            checkpoint_config = checkpoint["config"]
-            self.config.update({k: v for k, v in checkpoint_config.items() if k in self.config})
-            self.temperature = float(checkpoint_config.get("temperature", self.temperature))
-            self.threshold = float(checkpoint_config.get("threshold", self.threshold))
+            self._apply_artifact_config(checkpoint["config"])
 
         if config_path is not None:
             with open(config_path) as f:
-                file_config = json.load(f)
-            self.config.update({k: v for k, v in file_config.items() if k in self.config})
-            self.temperature = float(file_config.get("temperature", self.temperature))
-            self.threshold = float(file_config.get("threshold", self.threshold))
+                self._apply_artifact_config(json.load(f))
 
         if isinstance(checkpoint, dict):
-            self.temperature = float(checkpoint.get("temperature", self.temperature))
-            self.threshold = float(checkpoint.get("threshold", self.threshold))
+            self._apply_artifact_config(checkpoint)
 
         self._load_normalization(checkpoint)
+        self._validate_two_expert_config()
 
         self.model = MoE(**self.config).to(self.device)
         self.model.load_state_dict(state_dict)
@@ -171,6 +204,42 @@ class Profiler:
                 f"Feature count ({len(self.features)}) does not match model input_dim "
                 f"({self.config['input_dim']})."
             )
+
+    def _apply_artifact_config(self, artifact_config):
+        if not isinstance(artifact_config, dict):
+            return
+
+        self.config.update(
+            {
+                key: artifact_config[key]
+                for key in NETWORK_CONFIG_KEYS
+                if key in artifact_config
+            }
+        )
+        self.temperature = float(artifact_config.get("temperature", self.temperature))
+        self.threshold = float(artifact_config.get("threshold", self.threshold))
+        self.non_malignant_expert = int(
+            artifact_config.get("non_malignant_expert", self.non_malignant_expert)
+        )
+        self.malignant_expert = int(
+            artifact_config.get("malignant_expert", self.malignant_expert)
+        )
+
+    def _validate_two_expert_config(self):
+        experts = int(self.config["experts"])
+        if experts != 2:
+            raise ValueError(
+                f"scMoE expects a two-expert checkpoint, but this checkpoint has {experts} experts."
+            )
+
+        expert_ids = {self.non_malignant_expert, self.malignant_expert}
+        if expert_ids != {0, 1}:
+            raise ValueError(
+                "Two-expert mapping must use expert 0 and expert 1 for normal/malignant outputs."
+            )
+
+        if self.non_malignant_expert == self.malignant_expert:
+            raise ValueError("Normal and malignant experts must be different.")
 
     def _load_normalization(self, checkpoint):
         mean_path = self.pretrain_dir / "train_mean.npy"
