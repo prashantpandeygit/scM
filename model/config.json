@@ -1,10 +1,12 @@
 {
   "input_dim": 3735,
-  "experts": 4,
+  "experts": 2,
   "expert_hidden": 128,
   "gate_hidden": 128,
   "dropout": 0.25,
   "input_dropout": 0.05,
-  "temperature": 0.7281492352485657,
-  "threshold": 0.5
+  "temperature": 0.8419448733329773,
+  "threshold": 0.5,
+  "non_malignant_expert": 0,
+  "malignant_expert": 1
 }
